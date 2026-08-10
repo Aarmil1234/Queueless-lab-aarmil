@@ -36,9 +36,9 @@ const testReportSchema = new mongoose.Schema({
 });
 
 // code index is already defined with unique: true in schema
-parameterSchema.index({ category: 1 });
-parameterSchema.index({ isActive: 1 });
+testReportSchema.index({ category: 1 });
+testReportSchema.index({ isActive: 1 });
 
 const TestReport = mongoose.model('TestReport', parameterSchema);
 
-module.exports = Parameter;
+module.exports = TestReport;
