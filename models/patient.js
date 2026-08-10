@@ -33,9 +33,9 @@ const patientSchema = new Schema({
         required: [true, 'Age is required'],
         min: [0, 'Age cannot be negative']
     },
-    ageType: {
+     ageType: {
         type: String,
-        enum: ['month', 'year'],
+        enum: ['days','month', 'year'],
         default: 'year'
     },
     referredByDoctor: {
