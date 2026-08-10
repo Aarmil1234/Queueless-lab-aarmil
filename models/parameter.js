@@ -53,7 +53,7 @@ const parameterSchema = new mongoose.Schema({
 parameterSchema.index({ category: 1 });
 parameterSchema.index({ isActive: 1 });
 
-const TestReport = mongoose.model('TestReport', parameterSchema);
+const Parameter = mongoose.model('Parameter', parameterSchema);
 
 module.exports = Parameter;
 
