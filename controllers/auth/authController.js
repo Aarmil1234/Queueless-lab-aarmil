@@ -25,9 +25,9 @@ async function login(req, res) {
             });
         }
 
-        // Find user by mobile and pass
-        const owner = await LaboratoryOwner.findOne({ labMobileNumber, password, isActive: true });
-        if (!owner) {
+        // Find user by mobile number (password is compared separately since it's hashed)
+        const owner = await LaboratoryOwner.findOne({ labMobileNumber, isActive: true }).select('+password');
+        if (!owner || !(await owner.comparePassword(password))) {
             return sendResponse(req, res, 401, {
                 success: false,
                 message: 'Invalid credentials'
@@ -72,6 +72,14 @@ async function login(req, res) {
 async function signup(req, res) {
     try {
         const { labName, ownerName, mobileNumber, labMobileNumber, email, password } = req.body;
+
+        // Validate input
+        if (!password) {
+            return sendResponse(req, res, 400, {
+                success: false,
+                message: 'Password is required'
+            });
+        }
 
         // Check if user already exists
         const existingUser = await LaboratoryOwner.findOne({

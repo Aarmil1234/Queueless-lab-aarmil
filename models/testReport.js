@@ -1,4 +1,4 @@
-// /models/parameterModel.js
+// /models/testReportModel.js
 const mongoose = require('mongoose');
 
 const testReportSchema = new mongoose.Schema({
@@ -20,6 +20,10 @@ const testReportSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    category: {
+        type: String,
+        trim: true
+    },
     isActive: {
         type: Boolean,
         default: true
@@ -35,10 +39,24 @@ const testReportSchema = new mongoose.Schema({
     }
 });
 
-// code index is already defined with unique: true in schema
 testReportSchema.index({ category: 1 });
 testReportSchema.index({ isActive: 1 });
 
-const TestReport = mongoose.model('TestReport', parameterSchema);
+// Unique code per lab (ignoring soft-deleted rows)
+testReportSchema.index(
+    { labId: 1, code: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { delete: false }
+    }
+);
+
+const TestReport = mongoose.model('TestReport', testReportSchema);
 
 module.exports = TestReport;
+
+// {
+//   "code": "CBC",
+//   "testName": "Complete Blood Count",
+//   "category": "Blood Test"
+// }

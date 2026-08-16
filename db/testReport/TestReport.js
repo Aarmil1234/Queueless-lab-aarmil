@@ -1,10 +1,11 @@
-const Parameter = require('../../models/parameter');
 const TestReport = require('../../models/testReport');
+const Parameter = require('../../models/parameter');
+const ParameterSubCategory = require('../../models/parameterSubCategoryModel');
 const { Responses } = require('../../utils/responses');
 
 async function getAllTestReportsDb(labId) {
     try {
-        const testReport = await TestReport.find({ labId, delete: false }).sort({ create: -1 });
+        const testReport = await TestReport.find({ labId, delete: false }).sort({ createdAt: -1 });
         return testReport;
     } catch (error) {
         return [];
@@ -20,16 +21,75 @@ async function getTestReportByIdDb(id, labId) {
     }
 }
 
+async function getTestReportParametersWithSubCategoriesDb(testReportId, labId) {
+    try {
+        const testReport = await TestReport.findOne({
+            _id: testReportId,
+            labId,
+            delete: false,
+            isActive: true
+        }).lean();
+
+        if (!testReport) {
+            return {
+                success: false,
+                message: 'Test report not found'
+            };
+        }
+
+        const parameters = await Parameter.find({
+            testReportId,
+            labId,
+            delete: false,
+            isActive: true
+        })
+        .select('code name category type unit')
+        .lean();
+
+        // Get subcategories for each parameter
+        const parametersWithSubCategories = await Promise.all(
+            parameters.map(async (parameter) => {
+                const subCategories = await ParameterSubCategory.find({
+                    parameterId: parameter._id,
+                    delete: false,
+                    isActive: true
+                })
+                .select('code name')
+                .lean();
+
+                return {
+                    ...parameter,
+                    subCategories
+                };
+            })
+        );
+
+        return {
+            ...Responses.success,
+            data: {
+                ...testReport,
+                parameters: parametersWithSubCategories
+            }
+        };
+    } catch (error) {
+        console.error('Error in getTestReportParametersWithSubCategoriesDb:', error);
+        return {
+            ...Responses.tryAgain,
+            error: error.message
+        };
+    }
+}
+
 async function addTestReportDb(data) {
     try {
-        //check if parameter with same code already exists 
+        //check if test report with same code already exists
         const existingTestReport = await TestReport.findOne({
             code: { $regex: new RegExp(`^${data.code}$`, 'i') },
             labId: data.labId,
             delete: false
         });
-        
-        if (existingParameter) {
+
+        if (existingTestReport) {
             return Responses.alreadyExist;
         }
         const testReport = new TestReport(data);
@@ -94,6 +154,7 @@ async function deleteTestReportDb(id, labId) {
 module.exports = {
     getAllTestReportsDb,
     getTestReportByIdDb,
+    getTestReportParametersWithSubCategoriesDb,
     addTestReportDb,
     updateTestReportDb,
     deleteTestReportDb

@@ -1,89 +1,116 @@
-const { sendResponse } = require("../../utils/sendResponse");
-const {
-    addParameterDb,
-    updateParameterDb,
-    getAllParametersDb,
-    getParameterByIdDb,
-    deleteParameterDb
-} = require("../parameter/parameter");
+const Parameter = require('../../models/parameter');
+const { Responses } = require('../../utils/responses');
 
-const sanitizeParameterPayload = (payload = {}) => ({
-    ...(payload.code && { code: payload.code.trim().toUpperCase() }),
-    ...(payload.name && { name: payload.name.trim() }),
-    ...(payload.category && { category: payload.category.trim() }),
-    ...(payload.type && { type: payload.type.toUpperCase() }),
-    ...(payload.unit !== undefined && {
-        unit: payload.unit ? payload.unit.trim() : null
-    }),
-    ...(payload.isActive !== undefined && { isActive: payload.isActive })
-});
-
-async function addParameter(req, res) {
+async function getAllParametersDb(labId) {
     try {
-        const parameterData = sanitizeParameterPayload(req.body);
-        parameterData.labId = req.labId;
-        const response =  await addParameterDb(parameterData);
-        return sendResponse(req, res, response.statusCode, response.clientMessage);
+        const parameters = await Parameter.find({ labId, delete: false })
+            .populate('testReportId', 'code testName category')
+            .sort({ createdAt: -1 });
+        return parameters;
     } catch (error) {
-        // logger.error(`Error in addParameter: ${error.message}`);
-        
-        return sendResponse(req, res, 500, error.message);
-    }
-};
-
-/**
- * UPDATE PARAMETER
- */
-async function updateParameter(req, res) {
-    try {
-        const { id } = req.params;
-        const updateData = sanitizeParameterPayload(req.body);
-        const response = await updateParameterDb(id, updateData, req.labId);
-        return sendResponse(req, res, response.statusCode, response.clientMessage);
-    } catch (error) {
-        return sendResponse(req, res, 500, error.message);
-    }
-};
-
-async function getAllParameters(req, res) {
-    try {
-        const response = await getAllParametersDb(req.labId);
-        if(response.length > 0){
-            return sendResponse(req, res, 200, response);
-        }
-        return sendResponse(req, res, 404, "No parameters found");
-    } catch (error) {
-        return sendResponse(req, res, 500, error.message);
+        return [];
     }
 }
 
-async function getParameterById(req, res) {
+async function getParametersByTestReportIdDb(testReportId, labId) {
     try {
-        const { id } = req.params;
-        const response = await getParameterByIdDb(id, req.labId);
-        if(response.length > 0){
-            return sendResponse(req, res, 200, response);
-        }
-        return sendResponse(req, res, 404, "Parameter not found");
+        const parameters = await Parameter.find({ testReportId, labId, delete: false })
+            .populate('testReportId', 'code testName category')
+            .sort({ createdAt: -1 });
+        return parameters;
     } catch (error) {
-        return sendResponse(req, res, 500, error.message);
+        return [];
     }
 }
 
-async function deleteParameter(req, res) {
+async function getParameterByIdDb(id, labId) {
     try {
-        const { id } = req.params;
-        const response = await deleteParameterDb(id, req.labId);
-        return sendResponse(req, res, response.statusCode, response.clientMessage);
+        const parameter = await Parameter.findOne({ _id: id, labId })
+            .populate('testReportId', 'code testName category');
+        return parameter ? [parameter] : [];
     } catch (error) {
-        return sendResponse(req, res, 500, error.message);
+        return [];
+    }
+}
+
+async function addParameterDb(data) {
+    try {
+        //check if parameter with same code already exists under the same test report
+        const existingParameter = await Parameter.findOne({
+            testReportId: data.testReportId,
+            code: { $regex: new RegExp(`^${data.code}$`, 'i') },
+            labId: data.labId,
+            delete: false
+        });
+
+        if (existingParameter) {
+            return Responses.alreadyExist;
+        }
+        const parameter = new Parameter(data);
+
+        await parameter.save();
+        return Responses.success;
+    } catch (error) {
+        return { ...Responses.tryAgain, error: error.message };
+    }
+}
+
+async function updateParameterDb(id, data, labId) {
+    try {
+        //check if parameter exists
+        const existingParameter = await Parameter.findOne({ _id: id, labId });
+        if (!existingParameter) {
+            return Responses.notFound;
+        }
+        // If code is being updated, check for duplicates within the same test report
+        if (data.code && data.code !== existingParameter.code) {
+            const codeExists = await Parameter.findOne({
+                testReportId: data.testReportId || existingParameter.testReportId,
+                code: data.code,
+                labId,
+                _id: { $ne: id },
+                delete: { $ne: true }
+            });
+            if (codeExists) {
+                return {
+                    ...Responses.alreadyExist,
+                    clientMessage: { Message: 'A parameter with this code already exists for the specified test report' }
+                };
+            }
+        }
+        const updatedParameter = await Parameter.findByIdAndUpdate(
+            id,
+            {
+                ...data,
+                updatedAt: new Date()
+            },
+            { new: true, runValidators: true }
+        ).lean();
+        return Responses.success;
+    } catch (error) {
+        return { ...Responses.tryAgain, error: error.message };
+    }
+}
+
+async function deleteParameterDb(id, labId) {
+    try {
+        const deletedParameter = await Parameter.findOneAndUpdate(
+            { _id: id, labId },
+            {
+                delete: true,
+                updatedAt: new Date()
+            }, { new: true }).lean();
+        return Responses.success;
+    } catch (error) {
+        return Responses.tryAgain;
     }
 }
 
 module.exports = {
-    addParameter,
-    updateParameter,
-    getAllParameters,
-    getParameterById,
-    deleteParameter
+    getAllParametersDb,
+    getParametersByTestReportIdDb,
+    getParameterByIdDb,
+    addParameterDb,
+    updateParameterDb,
+    deleteParameterDb
 };

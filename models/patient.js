@@ -63,7 +63,7 @@ const patientSchema = new Schema({
         required: [true, 'Mobile number is required'],
         trim: true,
     },
-    tests: {
+    testReports: {
         type: Array,
         default: []
     },
